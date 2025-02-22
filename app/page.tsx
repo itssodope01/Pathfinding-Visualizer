@@ -2,10 +2,74 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import Grid from "../components/Grid";
-import Controls from "../components/Controls";
-import { getInitialGrid, manhattanDistance } from "../utils/gridUtils";
-import { NodeType } from "../types/NodeType";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import {
+  Play,
+  Pause,
+  RefreshCw,
+  MapPin,
+  Flag,
+  BrickWallIcon as Brick,
+} from "lucide-react";
+
+import { visualizeDijkstra } from "@/algorithms/dijkstra";
+import { visualizeAStar } from "@/algorithms/astar";
+import { visualizeBFS } from "@/algorithms/bfs";
+import { visualizeDFS } from "@/algorithms/dfs";
+import { NodeType } from "@/types/NodeType";
+
+const createNode = (row: number, col: number): NodeType => {
+  return {
+    row,
+    col,
+    isStart: false,
+    isEnd: false,
+    distance: Number.POSITIVE_INFINITY,
+    isVisited: false,
+    isWall: false,
+    isPath: false,
+    previousNode: null,
+  };
+};
+
+const getInitialGrid = (rows: number, cols: number): NodeType[][] => {
+  const grid: NodeType[][] = [];
+  for (let row = 0; row < rows; row++) {
+    const currentRow: NodeType[] = [];
+    for (let col = 0; col < cols; col++) {
+      currentRow.push(createNode(row, col));
+    }
+    grid.push(currentRow);
+  }
+  return grid;
+};
+
+const getNodeClassName = (node: NodeType): string => {
+  let classes =
+    "border border-gray-300 inline-block transition-all duration-300 ease-in-out";
+  if (node.isStart) {
+    classes += " bg-green-500";
+  } else if (node.isEnd) {
+    classes += " bg-red-500";
+  } else if (node.isPath) {
+    classes += " bg-yellow-400";
+  } else if (node.isWall) {
+    classes += " bg-gray-800";
+  } else if (node.isVisited) {
+    classes += " bg-blue-400";
+  } else {
+    classes += " bg-white";
+  }
+  return classes;
+};
 
 const PathFindingVisualizer: React.FC = () => {
   const [grid, setGrid] = useState<NodeType[][]>([]);
@@ -30,7 +94,9 @@ const PathFindingVisualizer: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -86,20 +152,31 @@ const PathFindingVisualizer: React.FC = () => {
     let newNode;
 
     if (currentMode === "wall") {
-      newNode = { ...node, isWall: !node.isWall };
+      newNode = {
+        ...node,
+        isWall: !node.isWall,
+      };
     } else if (currentMode === "start") {
       const oldStartNode = newGrid.flat().find((node) => node.isStart);
       if (oldStartNode) {
         oldStartNode.isStart = false;
       }
-      newNode = { ...node, isStart: true, isWall: false };
+      newNode = {
+        ...node,
+        isStart: true,
+        isWall: false,
+      };
       setStartPos({ row, col });
     } else if (currentMode === "end") {
       const oldEndNode = newGrid.flat().find((node) => node.isEnd);
       if (oldEndNode) {
         oldEndNode.isEnd = false;
       }
-      newNode = { ...node, isEnd: true, isWall: false };
+      newNode = {
+        ...node,
+        isEnd: true,
+        isWall: false,
+      };
       setEndPos({ row, col });
     } else {
       newNode = { ...node };
@@ -122,7 +199,9 @@ const PathFindingVisualizer: React.FC = () => {
     setGrid(newGrid);
   };
 
-  const handleMouseUp = () => setMouseIsPressed(false);
+  const handleMouseUp = () => {
+    setMouseIsPressed(false);
+  };
 
   const animateFinalPath = async (endNode: NodeType) => {
     let currentNode: NodeType | null = endNode;
@@ -145,203 +224,6 @@ const PathFindingVisualizer: React.FC = () => {
     }
   };
 
-  const sortNodesByDistance = (unvisitedNodes: NodeType[]) => {
-    unvisitedNodes.sort((a, b) => a.distance - b.distance);
-  };
-
-  const updateUnvisitedNeighbors = (node: NodeType, grid: NodeType[][]) => {
-    const unvisitedNeighbors = getUnvisitedNeighbors(node, grid);
-    for (const neighbor of unvisitedNeighbors) {
-      neighbor.distance = node.distance + 1;
-      neighbor.previousNode = node;
-    }
-  };
-
-  const getUnvisitedNeighbors = (
-    node: NodeType,
-    grid: NodeType[][]
-  ): NodeType[] => {
-    const neighbors: NodeType[] = [];
-    const { row, col } = node;
-    if (row > 0) neighbors.push(grid[row - 1][col]);
-    if (row < grid.length - 1) neighbors.push(grid[row + 1][col]);
-    if (col > 0) neighbors.push(grid[row][col - 1]);
-    if (col < grid[0].length - 1) neighbors.push(grid[row][col + 1]);
-    return neighbors.filter((n) => !n.isVisited && !n.isWall);
-  };
-
-  const visualizeDijkstra = async (
-    grid: NodeType[][],
-    startNode: NodeType,
-    endNode: NodeType
-  ) => {
-    startNode.distance = 0;
-    const unvisitedNodes = grid.flat();
-
-    while (unvisitedNodes.length) {
-      sortNodesByDistance(unvisitedNodes);
-      const closestNode = unvisitedNodes.shift();
-      if (!closestNode) break;
-      if (closestNode.isWall) continue;
-      if (closestNode.distance === Number.POSITIVE_INFINITY) return;
-
-      closestNode.isVisited = true;
-      await new Promise((resolve) =>
-        setTimeout(() => {
-          setGrid((prevGrid) =>
-            prevGrid.map((row) =>
-              row.map((node) =>
-                node.row === closestNode.row && node.col === closestNode.col
-                  ? { ...node, isVisited: true }
-                  : node
-              )
-            )
-          );
-          resolve(null);
-        }, 100 - speed)
-      );
-
-      if (closestNode === endNode) return;
-      updateUnvisitedNeighbors(closestNode, grid);
-    }
-  };
-
-  const visualizeAStar = async (
-    grid: NodeType[][],
-    startNode: NodeType,
-    endNode: NodeType
-  ) => {
-    startNode.distance = 0;
-    const openSet: NodeType[] = [startNode];
-
-    while (openSet.length) {
-      openSet.sort(
-        (a, b) =>
-          a.distance +
-          manhattanDistance(a, endNode) -
-          (b.distance + manhattanDistance(b, endNode))
-      );
-      const currentNode = openSet.shift();
-      if (!currentNode) break;
-      if (currentNode.isWall) continue;
-
-      currentNode.isVisited = true;
-      await new Promise((resolve) =>
-        setTimeout(() => {
-          setGrid((prevGrid) =>
-            prevGrid.map((row) =>
-              row.map((node) =>
-                node.row === currentNode.row && node.col === currentNode.col
-                  ? { ...node, isVisited: true }
-                  : node
-              )
-            )
-          );
-          resolve(null);
-        }, 100 - speed)
-      );
-
-      if (currentNode === endNode) return;
-
-      const neighbors = getUnvisitedNeighbors(currentNode, grid);
-      for (const neighbor of neighbors) {
-        if (!neighbor.isVisited && !neighbor.isWall) {
-          const tentativeG = currentNode.distance + 1;
-          if (tentativeG < neighbor.distance) {
-            neighbor.distance = tentativeG;
-            neighbor.previousNode = currentNode;
-            if (!openSet.includes(neighbor)) {
-              openSet.push(neighbor);
-            }
-          }
-        }
-      }
-    }
-  };
-
-  const visualizeBFS = async (
-    grid: NodeType[][],
-    startNode: NodeType,
-    endNode: NodeType
-  ) => {
-    const queue: NodeType[] = [];
-    startNode.distance = 0;
-    startNode.isVisited = true;
-    queue.push(startNode);
-
-    while (queue.length) {
-      const currentNode = queue.shift();
-      if (!currentNode) break;
-      if (currentNode.isWall) continue;
-      await new Promise((resolve) =>
-        setTimeout(() => {
-          setGrid((prevGrid) =>
-            prevGrid.map((row) =>
-              row.map((node) =>
-                node.row === currentNode.row && node.col === currentNode.col
-                  ? { ...node, isVisited: true }
-                  : node
-              )
-            )
-          );
-          resolve(null);
-        }, 100 - speed)
-      );
-      if (currentNode === endNode) return;
-      const neighbors = getUnvisitedNeighbors(currentNode, grid);
-      for (const neighbor of neighbors) {
-        if (!neighbor.isVisited && !neighbor.isWall) {
-          neighbor.distance = currentNode.distance + 1;
-          neighbor.previousNode = currentNode;
-          neighbor.isVisited = true;
-          queue.push(neighbor);
-        }
-      }
-    }
-  };
-
-  const visualizeDFS = async (
-    grid: NodeType[][],
-    startNode: NodeType,
-    endNode: NodeType
-  ) => {
-    const stack: NodeType[] = [];
-    startNode.distance = 0;
-    stack.push(startNode);
-
-    while (stack.length) {
-      const currentNode = stack.pop();
-      if (!currentNode) break;
-      if (currentNode.isWall) continue;
-      if (!currentNode.isVisited) {
-        currentNode.isVisited = true;
-        await new Promise((resolve) =>
-          setTimeout(() => {
-            setGrid((prevGrid) =>
-              prevGrid.map((row) =>
-                row.map((node) =>
-                  node.row === currentNode.row && node.col === currentNode.col
-                    ? { ...node, isVisited: true }
-                    : node
-                )
-              )
-            );
-            resolve(null);
-          }, 100 - speed)
-        );
-        if (currentNode === endNode) return;
-      }
-      const neighbors = getUnvisitedNeighbors(currentNode, grid);
-      for (const neighbor of neighbors) {
-        if (!neighbor.isVisited && !neighbor.isWall) {
-          neighbor.distance = currentNode.distance + 1;
-          neighbor.previousNode = currentNode;
-          stack.push(neighbor);
-        }
-      }
-    }
-  };
-
   const visualize = async () => {
     if (isRunning) return;
     setIsRunning(true);
@@ -359,14 +241,18 @@ const PathFindingVisualizer: React.FC = () => {
     const startNode = newGrid[startPos.row][startPos.col];
     const endNode = newGrid[endPos.row][endPos.col];
 
+    const updateGrid = (gridToUpdate: NodeType[][]) => {
+      setGrid([...gridToUpdate]);
+    };
+
     if (algorithm === "dijkstra") {
-      await visualizeDijkstra(newGrid, startNode, endNode);
+      await visualizeDijkstra(newGrid, startNode, endNode, updateGrid, speed);
     } else if (algorithm === "astar") {
-      await visualizeAStar(newGrid, startNode, endNode);
+      await visualizeAStar(newGrid, startNode, endNode, updateGrid, speed);
     } else if (algorithm === "bfs") {
-      await visualizeBFS(newGrid, startNode, endNode);
+      await visualizeBFS(newGrid, startNode, endNode, updateGrid, speed);
     } else if (algorithm === "dfs") {
-      await visualizeDFS(newGrid, startNode, endNode);
+      await visualizeDFS(newGrid, startNode, endNode, updateGrid, speed);
     }
 
     if (endNode.previousNode) {
@@ -378,6 +264,13 @@ const PathFindingVisualizer: React.FC = () => {
   const resetGrid = () => {
     setIsRunning(false);
     initializeGrid();
+  };
+
+  const gridStyle: React.CSSProperties = {
+    gridTemplateColumns: `repeat(${grid[0]?.length || 1}, ${cellSize}px)`,
+    ...(isMobile
+      ? {}
+      : { width: `${(grid[0]?.length || 1) * cellSize + 58}px` }),
   };
 
   return (
@@ -396,17 +289,88 @@ const PathFindingVisualizer: React.FC = () => {
         transition={{ duration: 0.3, delay: 0.1 }}
         className="mb-4 sm:mb-8 flex flex-col sm:flex-row items-center justify-center gap-4"
       >
-        <Controls
-          currentMode={currentMode}
-          algorithm={algorithm}
-          speed={speed}
-          isRunning={isRunning}
-          onModeChange={setCurrentMode}
-          onAlgorithmChange={setAlgorithm}
-          onSpeedChange={setSpeed}
-          onVisualize={visualize}
-          onReset={resetGrid}
-        />
+        <div className="bg-white p-4 rounded-lg shadow-md flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+          <Select
+            value={currentMode}
+            onValueChange={(value) =>
+              setCurrentMode(value as "start" | "end" | "wall")
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Select Mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="wall">
+                <div className="flex items-center">
+                  <Brick className="mr-2 h-4 w-4" />
+                  Wall
+                </div>
+              </SelectItem>
+              <SelectItem value="start">
+                <div className="flex items-center">
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Start Point
+                </div>
+              </SelectItem>
+              <SelectItem value="end">
+                <div className="flex items-center">
+                  <Flag className="mr-2 h-4 w-4" />
+                  End Point
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={algorithm}
+            onValueChange={(value) =>
+              setAlgorithm(value as "dijkstra" | "astar" | "bfs" | "dfs")
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Select Algorithm" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dijkstra">Dijkstra's</SelectItem>
+              <SelectItem value="astar">A*</SelectItem>
+              <SelectItem value="bfs">Breadth-First Search (BFS)</SelectItem>
+              <SelectItem value="dfs">Depth-First Search (DFS)</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium">Speed:</span>
+            <Slider
+              value={[speed]}
+              onValueChange={(value) => setSpeed(value[0])}
+              max={100}
+              step={1}
+              className="w-full sm:w-[200px]"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            onClick={visualize}
+            disabled={isRunning}
+            size="lg"
+            className="flex-1 sm:flex-auto"
+          >
+            {isRunning ? (
+              <Pause className="mr-2 h-4 w-4" />
+            ) : (
+              <Play className="mr-2 h-4 w-4" />
+            )}
+            {isRunning ? "Running..." : "Visualize"}
+          </Button>
+          <Button
+            onClick={resetGrid}
+            variant="outline"
+            size="lg"
+            className="flex-1 sm:flex-auto"
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+        </div>
       </motion.div>
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
@@ -414,14 +378,44 @@ const PathFindingVisualizer: React.FC = () => {
         transition={{ duration: 0.3, delay: 0.3 }}
         className="flex justify-center overflow-auto"
       >
-        <Grid
-          grid={grid}
-          cellSize={cellSize}
-          isMobile={isMobile}
-          onMouseDown={handleMouseDown}
-          onMouseEnter={handleMouseEnter}
+        <div
+          className="grid gap-0 bg-white p-2 sm:p-6 rounded-lg shadow-xl overflow-hidden"
+          style={gridStyle}
           onMouseUp={handleMouseUp}
-        />
+          onTouchEnd={handleMouseUp}
+        >
+          {grid.map((row) =>
+            row.map((node) => (
+              <motion.div
+                key={`node-${node.row}-${node.col}`}
+                id={`node-${node.row}-${node.col}`}
+                onMouseDown={() => handleMouseDown(node.row, node.col)}
+                onMouseEnter={() => handleMouseEnter(node.row, node.col)}
+                onTouchStart={() => handleMouseDown(node.row, node.col)}
+                onTouchMove={(e) => {
+                  e.preventDefault();
+                  const touch = e.touches[0];
+                  const element = document.elementFromPoint(
+                    touch.clientX,
+                    touch.clientY
+                  );
+                  if (element) {
+                    const [, row, col] = element.id.split("-");
+                    handleMouseEnter(
+                      Number.parseInt(row),
+                      Number.parseInt(col)
+                    );
+                  }
+                }}
+                className={`${getNodeClassName(node)} ${
+                  isMobile ? "w-4 h-4" : "w-6 h-6"
+                }`}
+                whileHover={{ scale: 1.2 }}
+                transition={{ type: "spring", stiffness: 500, damping: 20 }}
+              ></motion.div>
+            ))
+          )}
+        </div>
       </motion.div>
     </div>
   );
