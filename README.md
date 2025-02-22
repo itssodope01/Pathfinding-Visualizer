@@ -1,6 +1,7 @@
 # 🗺️ Pathfinding Visualizer
 
 An interactive pathfinding visualizer built using **React (Next.js with TypeScript)** and **Framer Motion**. It allows users to visualize pathfinding algorithms like **Dijkstra's, A\***, **BFS**, and **DFS** on a grid.
+
 [![Pathfinding Visualizer Demo](scr.png)](https://pathfinding-visualizer-xi-nine.vercel.app/)
 
 [Live Demo](https://pathfinding-visualizer-xi-nine.vercel.app/)
