@@ -79,7 +79,7 @@ const PathFindingVisualizer: React.FC = () => {
   );
   const [algorithm, setAlgorithm] = useState<
     "dijkstra" | "astar" | "bfs" | "dfs"
-  >("dijkstra");
+  >("astar");
   const [startPos, setStartPos] = useState<{ row: number; col: number }>({
     row: 0,
     col: 0,
